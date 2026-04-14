@@ -1,0 +1,358 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arav Typography Studio</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&family=Bebas+Neue&family=Permanent+Marker&family=Playfair+Display:wght@700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+
+<style>
+body{background:#020617;color:#fff;font-family:'Inter',sans-serif;}
+canvas{border-radius:12px;max-width:100%;background:#000;}
+</style>
+</head>
+
+<body class="h-screen flex flex-col md:flex-row overflow-hidden">
+
+<div class="w-full md:w-80 bg-slate-950 p-4 flex flex-col gap-3 overflow-y-auto">
+<h1 class="text-lg font-bold text-indigo-400">Arav Typography Studio</h1>
+<textarea id="textInput" class="w-full h-24 bg-slate-900 p-2 rounded"></textarea>
+
+<select id="ratioSelect" class="p-2 bg-slate-900 rounded">
+<option value="9/16">9:16</option>
+<option value="1/1">1:1</option>
+<option value="16/9">16:9</option>
+</select>
+
+<select id="pacingSelect" class="p-2 bg-slate-900 rounded">
+<option value="0.5">Fast</option>
+<option value="0.8" selected>Medium</option>
+<option value="1.5">Slow</option>
+</select>
+
+<select id="bgSelect" class="p-2 bg-slate-900 rounded">
+<option value="black">Black</option>
+<option value="green">Green</option>
+<option value="gradient">Gradient</option>
+<option value="white">White</option>
+</select>
+
+<select id="styleSelect" class="p-2 bg-slate-900 rounded">
+<option value="sigma">Sigma ULTRA</option>
+<option value="normal">Normal</option>
+</select>
+
+<select id="fontSelect" class="p-2 bg-slate-900 rounded"></select>
+<input type="color" id="fontColor" value="#ffffff" class="w-full h-10 rounded">
+
+<select id="effectSelect" class="p-2 bg-slate-900 rounded">
+<option value="none">No Effect</option>
+<option value="glow">Glow</option>
+<option value="neon">Neon</option>
+<option value="shadow">Shadow</option>
+</select>
+
+<button id="previewBtn" class="py-3 bg-slate-700 rounded hover:bg-slate-600 transition">Preview</button>
+<button id="downloadBtn" class="py-3 bg-indigo-600 rounded hover:bg-indigo-500 transition font-bold tracking-wide">Download</button>
+</div>
+
+<div class="flex-1 flex items-center justify-center p-2">
+<canvas id="mainCanvas"></canvas>
+</div>
+
+<script>
+
+const canvas=document.getElementById("mainCanvas");
+const ctx=canvas.getContext("2d");
+
+const textInput=document.getElementById("textInput");
+const ratioSelect=document.getElementById("ratioSelect");
+const pacingSelect=document.getElementById("pacingSelect");
+const bgSelect=document.getElementById("bgSelect");
+const styleSelect=document.getElementById("styleSelect");
+const fontSelect=document.getElementById("fontSelect");
+const fontColor=document.getElementById("fontColor");
+const effectSelect=document.getElementById("effectSelect");
+
+const previewBtn=document.getElementById("previewBtn");
+const downloadBtn=document.getElementById("downloadBtn");
+
+textInput.value="EMBRACE THE CHAOS STAY FOCUSED BECOME UNSTOPPABLE";
+
+let words=[],currentIndex=0,masterTL=null,isRecording=false;
+let anim={},sigmaConfigs=[];
+let recordingInterval; // Timer track karne ke liye
+
+const sizes={
+"9/16":{w:1080,h:1920},
+"1/1":{w:1080,h:1080},
+"16/9":{w:1920,h:1080}
+};
+
+const fontList=[
+"Inter","Bebas Neue","Permanent Marker","Playfair Display","Space Grotesk"
+];
+
+fontList.forEach(f=>{
+let opt=document.createElement("option");
+opt.value=f;
+opt.innerText=f;
+opt.style.fontFamily=f;
+fontSelect.appendChild(opt);
+});
+
+function splitChunks(text,min=3,max=5){
+let w=text.split(" "),res=[],i=0;
+while(i<w.length){
+let size=Math.floor(Math.random()*(max-min+1))+min;
+res.push(w.slice(i,i+size).join(" "));
+i+=size;
+}
+return res;
+}
+
+function generateSigma(line){
+let words=line.split(" ");
+let result=[];
+const mainFont=fontSelect.value;
+const accentFonts=["Bebas Neue","Permanent Marker","Playfair Display"];
+const accentFont=accentFonts[Math.floor(Math.random()*accentFonts.length)];
+const mainColor=fontColor.value;
+const accentColors=["#fde047","#a855f7","#ef4444"];
+const accentColor=accentColors[Math.floor(Math.random()*accentColors.length)];
+let i=0,highlightUsed=false;
+
+while(i<words.length){
+let groupSize=Math.floor(Math.random()*2)+1;
+let isAccent=Math.random()>0.6;
+let font=isAccent?accentFont:mainFont;
+let color=isAccent?accentColor:mainColor;
+let size=isAccent?(1.1+Math.random()*0.2):(0.9+Math.random()*0.1);
+let highlight=false;
+
+if(!highlightUsed && Math.random()>0.75){
+highlight=true;
+highlightUsed=true;
+}
+
+for(let j=0;j<groupSize && i<words.length;j++,i++){
+result.push({text:words[i],font,color,size,highlight});
+}
+}
+return result;
+}
+
+function applyEffects(color){
+ctx.shadowBlur=0;
+let e=effectSelect.value;
+if(e==="glow"){ctx.shadowColor=color;ctx.shadowBlur=30;}
+if(e==="neon"){ctx.shadowColor=color;ctx.shadowBlur=50;}
+if(e==="shadow"){ctx.shadowColor="black";ctx.shadowBlur=20;}
+}
+
+function updateCanvas(){
+let d=sizes[ratioSelect.value];
+canvas.width=d.w;
+canvas.height=d.h;
+draw();
+}
+
+function draw(){
+let bg=bgSelect.value;
+if(bg==="black") ctx.fillStyle="#000";
+else if(bg==="green") ctx.fillStyle="#00FF00";
+else if(bg==="white") ctx.fillStyle="#fff";
+else{
+let g=ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+g.addColorStop(0,"#1e1b4b");
+g.addColorStop(1,"#020617");
+ctx.fillStyle=g;
+}
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+if(!words[currentIndex]) return;
+
+ctx.save();
+ctx.translate(canvas.width/2,canvas.height/2+anim.y);
+ctx.scale(anim.scale,anim.scale);
+ctx.globalAlpha=anim.opacity;
+
+if(styleSelect.value==="sigma"){
+let config=sigmaConfigs[currentIndex];
+let totalWidth=0;
+
+config.forEach(w=>{
+ctx.font=`900 ${80*w.size}px ${w.font}`;
+totalWidth+=ctx.measureText(w.text).width+20;
+});
+
+let x=-totalWidth/2;
+
+config.forEach(w=>{
+ctx.font=`900 ${80*w.size}px ${w.font}`;
+
+if(w.highlight){
+let width=ctx.measureText(w.text).width;
+ctx.fillStyle="#fde047";
+ctx.fillRect(x-6,-40,width+12,60);
+ctx.fillStyle="#000";
+}else{
+ctx.fillStyle=w.color;
+}
+
+applyEffects(w.color);
+ctx.fillText(w.text,x,0);
+x+=ctx.measureText(w.text).width+20;
+});
+
+}else{
+ctx.font=`900 100px ${fontSelect.value}`;
+ctx.fillStyle=bg==="white"?"#000":fontColor.value;
+ctx.textAlign="center";
+applyEffects(fontColor.value);
+ctx.fillText(words[currentIndex],0,0);
+}
+
+ctx.restore();
+}
+
+function playSequence(onFinish){
+if(masterTL) masterTL.kill();
+
+let lines=textInput.value.split("\n").filter(t=>t.trim());
+words=[];
+lines.forEach(l=>words.push(...splitChunks(l)));
+
+if(words.length===0) words=["TYPE TEXT"];
+
+currentIndex=0;
+anim={scale:1,opacity:0,y:0};
+sigmaConfigs=words.map(l=>generateSigma(l));
+let pace=parseFloat(pacingSelect.value);
+
+masterTL=gsap.timeline({onUpdate:draw,onComplete:onFinish});
+
+words.forEach((w,i)=>{
+masterTL.add(()=>currentIndex=i);
+masterTL.fromTo(anim,{scale:0.3,opacity:0,y:-100},{scale:1,opacity:1,y:0,duration:pace});
+masterTL.to(anim,{opacity:0,duration:0.3});
+});
+}
+
+// ✅ LIVE TIMER DOWNLOAD FUNCTION
+function startDownload() {
+    if (isRecording) return;
+    
+    if (!canvas.captureStream) {
+        alert("Aapka browser video recording support nahi karta. Kripya Chrome ya Edge ka istemal karein.");
+        return;
+    }
+
+    isRecording = true;
+    
+    const originalText = downloadBtn.innerText;
+    downloadBtn.classList.add("opacity-50", "cursor-not-allowed");
+
+    const stream = canvas.captureStream(60);
+    let options = {};
+    let extension = "webm";
+
+    if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
+        options = { mimeType: "video/webm; codecs=vp9" };
+    } else if (MediaRecorder.isTypeSupported("video/webm")) {
+        options = { mimeType: "video/webm" };
+    } else if (MediaRecorder.isTypeSupported("video/mp4")) {
+        options = { mimeType: "video/mp4" };
+        extension = "mp4";
+    }
+
+    let rec;
+    try {
+        rec = new MediaRecorder(stream, options);
+    } catch (e) {
+        alert("Recording start karne mein error aayi: " + e.message);
+        isRecording = false;
+        downloadBtn.innerText = originalText;
+        downloadBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        return;
+    }
+
+    let chunks = [];
+
+    rec.ondataavailable = e => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    rec.onstop = () => {
+        clearInterval(recordingInterval); // Timer clear karein
+        downloadBtn.innerText = "Processing File...";
+
+        let blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
+        let url = URL.createObjectURL(blob);
+
+        let a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = `arav-typography.${extension}`;
+        document.body.appendChild(a);
+        a.click();
+
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Reset button
+            downloadBtn.innerText = originalText;
+            downloadBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        }, 100);
+
+        isRecording = false;
+    };
+
+    rec.start();
+
+    playSequence(() => {
+        setTimeout(() => {
+            if (rec.state === "recording") {
+                rec.stop();
+            }
+        }, 800);
+    });
+
+    // ⏱️ TIMER LOGIC START
+    // masterTL automatically playSequence ke baad available hota hai
+    let totalTime = masterTL.duration() + 0.8; // GSAP duration + 800ms buffer
+    let timeLeft = totalTime;
+
+    downloadBtn.innerText = `Recording... ${timeLeft.toFixed(1)}s`;
+
+    recordingInterval = setInterval(() => {
+        timeLeft -= 0.1;
+        if (timeLeft <= 0) {
+            clearInterval(recordingInterval);
+            downloadBtn.innerText = "Saving video...";
+        } else {
+            downloadBtn.innerText = `Recording... ${timeLeft.toFixed(1)}s`;
+        }
+    }, 100);
+    // ⏱️ TIMER LOGIC END
+}
+
+previewBtn.onclick=()=>playSequence();
+downloadBtn.onclick=startDownload;
+ratioSelect.onchange=updateCanvas;
+bgSelect.onchange=draw;
+
+window.onload=async()=>{
+await document.fonts.ready;
+updateCanvas();
+setTimeout(()=>playSequence(),400);
+};
+
+</script>
+</body>
+</html>
