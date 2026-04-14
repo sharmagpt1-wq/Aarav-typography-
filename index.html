@@ -11,7 +11,7 @@ html
     <style>
         body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
         
-        /* Mobile optimization: Allow body scroll on small screens */
+        /* Mobile optimization */
         @media (max-width: 768px) {
             body { overflow-y: auto !important; height: auto !important; }
             .h-screen { height: auto !important; }
@@ -22,7 +22,6 @@ html
             border-radius: 12px; 
             max-width: 100%; 
             background-color: #000;
-            /* Adaptive canvas height for mobile */
             height: auto !important;
             max-height: 70vh;
         }
@@ -30,17 +29,28 @@ html
         .sidebar::-webkit-scrollbar { width: 4px; }
         .sidebar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
 
-        /* Smooth UI elements */
         .glass-panel {
             background: rgba(15, 23, 42, 0.6);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+
+        /* Pulsing recording indicator */
+        .rec-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     </style>
 </head>
 <body class="h-screen flex flex-col md:flex-row overflow-hidden">
 
-    <!-- Sidebar Controls (Top on Mobile, Side on Desktop) -->
+    <!-- Sidebar Controls -->
     <div class="w-full md:w-96 bg-slate-950 border-b md:border-b-0 md:border-r border-slate-800 p-6 flex flex-col gap-5 z-10 sidebar overflow-y-auto shrink-0">
         <div>
             <div class="flex flex-col">
@@ -108,13 +118,23 @@ html
         </div>
     </div>
 
-    <!-- Main Viewport (Bottom on Mobile) -->
+    <!-- Main Viewport -->
     <div class="flex-1 flex flex-col items-center justify-center p-4 md:p-8 bg-slate-900/40 relative min-h-[400px]">
         <canvas id="mainCanvas"></canvas>
         
-        <div id="renderOverlay" class="absolute inset-0 bg-slate-950/90 hidden flex-col items-center justify-center gap-4 z-50">
-            <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            <p class="font-black text-white tracking-[0.3em] uppercase text-sm">Recording Video...</p>
+        <!-- Live Render Overlay with Timer -->
+        <div id="renderOverlay" class="absolute inset-0 bg-slate-950/95 hidden flex-col items-center justify-center gap-6 z-50 p-6 text-center">
+            <div class="relative">
+                <div class="w-20 h-20 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center font-bold text-indigo-400 text-lg" id="timerValue">0s</div>
+            </div>
+            
+            <div class="space-y-2">
+                <p class="font-black text-white tracking-[0.3em] uppercase text-sm flex items-center justify-center">
+                    <span class="rec-dot"></span> RECORDING VIDEO
+                </p>
+                <p class="text-slate-500 text-xs max-w-[200px] leading-relaxed" id="renderStatus">Encoding at 60FPS... Please wait for download.</p>
+            </div>
         </div>
 
         <div class="mt-6 flex items-center gap-4 text-slate-600 text-[9px] font-black tracking-widest uppercase">
@@ -135,8 +155,9 @@ html
         const previewBtn = document.getElementById('previewBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const renderOverlay = document.getElementById('renderOverlay');
+        const timerValue = document.getElementById('timerValue');
 
-        textInput.value = "Welcome to Kinetix Pro. This system was developed by Arav Sharma. It makes your typography videos look professional.";
+        textInput.value = "Welcome to Kinetix Pro. This system was developed by Arav Sharma. Professional video rendering with live timer.";
 
         let chunks = [];
         let currentIndex = 0;
@@ -276,17 +297,37 @@ html
                     masterTL.to(anim, { opacity: 0, duration: 0.8, delay: 0.4 });
                 }
             });
+            
+            return masterTL;
         }
 
         async function startDownload() {
             if (isRecording) return;
             isRecording = true;
+            
+            // Build the sequence to calculate total time
+            const tempTL = playSequence();
+            const totalDuration = Math.ceil(tempTL.totalDuration());
+            tempTL.kill();
+            
             renderOverlay.classList.remove('hidden');
+            timerValue.innerText = `${totalDuration}s`;
+
             const stream = canvas.captureStream(60);
             const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12000000 });
             const buffer = [];
+            
+            // Start the timer countdown
+            let timeLeft = totalDuration;
+            const timerInterval = setInterval(() => {
+                timeLeft--;
+                if(timeLeft < 0) timeLeft = 0;
+                timerValue.innerText = `${timeLeft}s`;
+            }, 1000);
+
             recorder.ondataavailable = (e) => buffer.push(e.data);
             recorder.onstop = () => {
+                clearInterval(timerInterval);
                 const blob = new Blob(buffer, { type: 'video/webm' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
@@ -295,6 +336,7 @@ html
                 renderOverlay.classList.add('hidden');
                 isRecording = false;
             };
+
             recorder.start();
             playSequence(() => setTimeout(() => recorder.stop(), 500));
         }
@@ -310,4 +352,3 @@ html
     </script>
 </body>
 </html>
-
